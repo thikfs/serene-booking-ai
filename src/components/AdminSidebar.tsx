@@ -30,7 +30,7 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <SidebarGroup defaultOpen>
+        <SidebarGroup>
           <SidebarGroupLabel className="font-display text-xs">
             {!collapsed && "Serenity Admin"}
           </SidebarGroupLabel>
