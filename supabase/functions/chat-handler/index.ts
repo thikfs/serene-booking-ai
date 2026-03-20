@@ -386,7 +386,7 @@ async function runOpenAIChatWithToolCalling(params: {
     })),
   ];
 
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 2; i++) {
     console.log(`[OpenAI] Loop ${i}: POST to ${endpoint}...`);
     const res = await fetch(endpoint, {
       method: "POST",
@@ -483,7 +483,7 @@ async function runClaudeChatWithToolCalling(params: {
     content: m.content,
   }));
 
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 2; i++) {
     console.log(`[Claude] Loop ${i}: POST to ${endpoint}...`);
     const res = await fetch(endpoint, {
       method: "POST",
