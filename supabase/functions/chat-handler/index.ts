@@ -387,6 +387,7 @@ async function runOpenAIChatWithToolCalling(params: {
   ];
 
   for (let i = 0; i < 6; i++) {
+    console.log(`[OpenAI] Loop ${i}: POST to ${endpoint}...`);
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -483,6 +484,7 @@ async function runClaudeChatWithToolCalling(params: {
   }));
 
   for (let i = 0; i < 6; i++) {
+    console.log(`[Claude] Loop ${i}: POST to ${endpoint}...`);
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -556,6 +558,7 @@ async function runClaudeChatWithToolCalling(params: {
 
 export default async function handler(req: Request) {
   try {
+    console.log(`[REQUEST] Method: ${req.method} url: ${req.url}`);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
@@ -567,7 +570,9 @@ export default async function handler(req: Request) {
     const supabaseUrl = getEnv("SUPABASE_URL");
     const supabaseServiceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
 
+    console.log("[DB] Fetching agent settings...");
     const agentSettings = await getAgentSettings(supabaseUrl, supabaseServiceRoleKey);
+    console.log("[DB] Loaded agent settings successfully.");
     const systemPromptFromTable =
       agentSettings.system_prompt && agentSettings.system_prompt.trim()
         ? agentSettings.system_prompt.trim()
@@ -685,7 +690,9 @@ export default async function handler(req: Request) {
       },
     };
 
+    console.log(`[LLM] Selected provider: ${provider}`);
     if (provider === "openai") {
+      console.log("[LLM] Starting OpenAI chat loop...");
       const out = await runOpenAIChatWithToolCalling({
         apiKey: openaiKey!,
         model: openaiModel,
@@ -708,6 +715,7 @@ export default async function handler(req: Request) {
       };
     });
 
+    console.log("[LLM] Starting Claude chat loop...");
     const out = await runClaudeChatWithToolCalling({
       apiKey: anthropicKey!,
       model: anthropicModel,
