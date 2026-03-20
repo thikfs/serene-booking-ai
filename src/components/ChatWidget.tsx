@@ -32,8 +32,10 @@ export function ChatWidget() {
   const [sending, setSending] = useState(false);
 
   const chatEndpoint = useMemo(() => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+    let supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
     if (!supabaseUrl) return undefined;
+    // Remove trailing slash if present to prevent double-slash /functions path
+    supabaseUrl = supabaseUrl.replace(/\/+$/, "");
     return `${supabaseUrl}/functions/v1/chat-handler`;
   }, []);
 
