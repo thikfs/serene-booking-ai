@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,10 @@ interface Message {
   text: string;
   sender: "bot" | "user";
 }
+
+type ChatRequestPayload = {
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+};
 
 const quickReplies = [
   "Check availability",
@@ -25,17 +29,61 @@ export function ChatWidget() {
     },
   ]);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const sendMessage = (text: string) => {
-    if (!text.trim()) return;
+  const chatEndpoint = useMemo(() => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+    if (!supabaseUrl) return undefined;
+    return `${supabaseUrl}/functions/v1/chat-handler`;
+  }, []);
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || sending) return;
+    if (!chatEndpoint) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), text: "Chat is not configured yet (missing VITE_SUPABASE_URL).", sender: "bot" },
+      ]);
+      return;
+    }
+
     const userMsg: Message = { id: Date.now(), text, sender: "user" };
-    const botMsg: Message = {
-      id: Date.now() + 1,
-      text: "Thank you for your message. A member of our team will get back to you shortly. 💚",
-      sender: "bot",
-    };
-    setMessages((prev) => [...prev, userMsg, botMsg]);
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
     setInput("");
+    setSending(true);
+
+    const payload: ChatRequestPayload = {
+      messages: nextMessages.map((m) => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        content: m.text,
+      })),
+    };
+
+    try {
+      const res = await fetch(chatEndpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await res.json().catch(() => null)) as { reply?: string; error?: string } | null;
+      const reply =
+        data?.reply ??
+        (res.ok ? "Sorry, I couldn't process that request." : `Chat error: ${data?.error ?? res.status}`);
+
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 1, text: reply, sender: "bot" },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 1, text: "Network error. Please try again.", sender: "bot" },
+      ]);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -96,7 +144,7 @@ export function ChatWidget() {
               placeholder="Type a message..."
               className="text-sm"
             />
-            <Button size="icon" onClick={() => sendMessage(input)}>
+            <Button size="icon" onClick={() => sendMessage(input)} disabled={sending}>
               <Send className="h-4 w-4" />
             </Button>
           </div>

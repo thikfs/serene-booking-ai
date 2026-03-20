@@ -71,3 +71,32 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Phase 3: AI Bot (Supabase Edge Function)
+
+This repo now includes a Supabase Edge Function at `supabase/functions/chat-handler/index.ts`.
+
+### Frontend env var
+
+- `VITE_SUPABASE_URL` — Your Supabase project URL (used by `ChatWidget` to call `${VITE_SUPABASE_URL}/functions/v1/chat-handler`).
+
+### Edge Function env vars
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`)
+- Optional:
+  - `LLM_PROVIDER` (`openai` or `anthropic`)
+  - `OPENAI_MODEL` (default: `gpt-4o-mini`)
+  - `ANTHROPIC_MODEL` (default: `claude-3-5-sonnet-20241022`)
+  - `BUSINESS_HOURS_START` (default: `09:00`)
+  - `BUSINESS_HOURS_END` (default: `17:00`)
+  - `SLOT_INTERVAL_MINUTES` (default: `30`)
+
+### Expected DB columns
+
+The function assumes:
+
+- `services`: `id`, `name`, `price`, `duration` (duration is in minutes)
+- `bookings`: `service_id`, `appointment_time` (timestamptz), and optional `customer_name`, `customer_email`, `customer_phone`, `notes`
+- `agent_settings`: `system_prompt`, `full_booking` (boolean)
