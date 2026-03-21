@@ -7,12 +7,36 @@ import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 const iconSet = [Heart, Users, Flower2];
 
+const fallbackServices = [
+  {
+    id: "sample-1",
+    name: "Individual Therapy",
+    duration: 60,
+    price: 120,
+  },
+  {
+    id: "sample-2",
+    name: "Couples Counseling",
+    duration: 90,
+    price: 180,
+  },
+  {
+    id: "sample-3",
+    name: "Group Meditation",
+    duration: 45,
+    price: 40,
+  },
+];
+
 const Index = () => {
   const { data: services, isLoading, error } = useQuery({
     queryKey: ["public-services"],
     queryFn: fetchServices,
     enabled: isSupabaseConfigured,
   });
+
+  const hasDbServices = Boolean(services && services.length > 0);
+  const displayServices = hasDbServices ? services : fallbackServices;
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,7 +68,7 @@ const Index = () => {
         </h2>
         {!isSupabaseConfigured && (
           <p className="text-center text-sm text-muted-foreground">
-            Connect Supabase to load services dynamically.
+            Showing sample services. Connect Supabase to manage these dynamically.
           </p>
         )}
         {isSupabaseConfigured && isLoading && (
@@ -54,35 +78,35 @@ const Index = () => {
           <p className="text-center text-sm text-destructive">Unable to load services.</p>
         )}
         {isSupabaseConfigured && services && services.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground">No services are available yet.</p>
+          <p className="text-center text-sm text-muted-foreground">
+            Showing sample services until you add your own in the dashboard.
+          </p>
         )}
-        {isSupabaseConfigured && services && services.length > 0 && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {services.map((s, index) => {
-              const Icon = iconSet[index % iconSet.length];
-              return (
-                <Card key={s.id} className="transition-shadow hover:shadow-md">
-                  <CardHeader className="flex flex-row items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <Icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{s.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {s.duration} min · {s.price ? `$${s.price}` : "Contact us"}
-                      </p>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {displayServices.map((s, index) => {
+            const Icon = iconSet[index % iconSet.length];
+            return (
+              <Card key={s.id} className="transition-shadow hover:shadow-md">
+                <CardHeader className="flex flex-row items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">{s.name}</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Speak with our team to tailor the right session for you.
+                      {s.duration} min · {s.price ? `$${s.price}` : "Contact us"}
                     </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Speak with our team to tailor the right session for you.
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </section>
 
       {/* Footer */}
