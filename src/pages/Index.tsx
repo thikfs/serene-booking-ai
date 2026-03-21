@@ -1,32 +1,19 @@
 import { Heart, Users, Flower2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChatWidget } from "@/components/ChatWidget";
+import { useQuery } from "@tanstack/react-query";
+import { fetchServices } from "@/lib/supabaseApi";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
-const services = [
-  {
-    title: "Individual Therapy",
-    duration: "60 min",
-    price: "$120",
-    icon: Heart,
-    description: "One-on-one sessions focused on your personal growth, healing, and emotional well-being.",
-  },
-  {
-    title: "Couples Counseling",
-    duration: "90 min",
-    price: "$180",
-    icon: Users,
-    description: "Strengthen your relationship through guided communication and deeper understanding.",
-  },
-  {
-    title: "Group Meditation",
-    duration: "45 min",
-    price: "$40",
-    icon: Flower2,
-    description: "Find peace in community through guided mindfulness and meditation practice.",
-  },
-];
+const iconSet = [Heart, Users, Flower2];
 
 const Index = () => {
+  const { data: services, isLoading, error } = useQuery({
+    queryKey: ["public-services"],
+    queryFn: fetchServices,
+    enabled: isSupabaseConfigured,
+  });
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
@@ -55,26 +42,47 @@ const Index = () => {
         <h2 className="mb-10 text-center font-display text-3xl font-semibold text-foreground">
           Our Therapeutic Services
         </h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((s) => (
-            <Card key={s.title} className="transition-shadow hover:shadow-md">
-              <CardHeader className="flex flex-row items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <s.icon className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">{s.title}</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {s.duration} · {s.price}
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{s.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {!isSupabaseConfigured && (
+          <p className="text-center text-sm text-muted-foreground">
+            Connect Supabase to load services dynamically.
+          </p>
+        )}
+        {isSupabaseConfigured && isLoading && (
+          <p className="text-center text-sm text-muted-foreground">Loading services...</p>
+        )}
+        {isSupabaseConfigured && error && (
+          <p className="text-center text-sm text-destructive">Unable to load services.</p>
+        )}
+        {isSupabaseConfigured && services && services.length === 0 && (
+          <p className="text-center text-sm text-muted-foreground">No services are available yet.</p>
+        )}
+        {isSupabaseConfigured && services && services.length > 0 && (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {services.map((s, index) => {
+              const Icon = iconSet[index % iconSet.length];
+              return (
+                <Card key={s.id} className="transition-shadow hover:shadow-md">
+                  <CardHeader className="flex flex-row items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">{s.name}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {s.duration} min · {s.price ? `$${s.price}` : "Contact us"}
+                      </p>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      Speak with our team to tailor the right session for you.
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Footer */}

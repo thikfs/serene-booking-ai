@@ -3,58 +3,134 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import {
+  createService,
+  deleteService,
+  fetchServices,
+  ServiceRow,
+  updateService,
+} from "@/lib/supabaseApi";
 
-interface Service {
-  id: number;
+type ServiceFormState = {
   name: string;
-  price: number;
-  duration: number;
-}
+  price: string;
+  duration: string;
+};
 
-const initial: Service[] = [
-  { id: 1, name: "Individual Therapy", price: 120, duration: 60 },
-  { id: 2, name: "Couples Counseling", price: 180, duration: 90 },
-  { id: 3, name: "Group Meditation", price: 40, duration: 45 },
-];
+const emptyForm: ServiceFormState = { name: "", price: "", duration: "" };
 
 export default function ServiceManager() {
-  const [services, setServices] = useState<Service[]>(initial);
-  const [editing, setEditing] = useState<Service | null>(null);
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<ServiceRow | null>(null);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", price: "", duration: "" });
+  const [form, setForm] = useState<ServiceFormState>(emptyForm);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: services, isLoading, error } = useQuery({
+    queryKey: ["services"],
+    queryFn: fetchServices,
+    enabled: isSupabaseConfigured,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createService,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: updateService,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteService,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
+  });
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: "", price: "", duration: "" });
+    setForm(emptyForm);
+    setFormError(null);
     setOpen(true);
   };
 
-  const openEdit = (s: Service) => {
+  const openEdit = (s: ServiceRow) => {
     setEditing(s);
-    setForm({ name: s.name, price: String(s.price), duration: String(s.duration) });
+    setForm({
+      name: s.name,
+      price: s.price === null ? "" : String(s.price),
+      duration: String(s.duration),
+    });
+    setFormError(null);
     setOpen(true);
   };
 
-  const save = () => {
-    const entry: Service = {
-      id: editing?.id ?? Date.now(),
-      name: form.name,
-      price: Number(form.price),
-      duration: Number(form.duration),
-    };
-    if (editing) {
-      setServices((prev) => prev.map((s) => (s.id === editing.id ? entry : s)));
-    } else {
-      setServices((prev) => [...prev, entry]);
+  const handleSave = async () => {
+    setFormError(null);
+    if (!form.name.trim()) {
+      setFormError("Name is required.");
+      return;
     }
-    setOpen(false);
+    const duration = Number(form.duration);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      setFormError("Duration must be a positive number.");
+      return;
+    }
+    const price = form.price.trim() ? Number(form.price) : null;
+    if (form.price.trim() && (!Number.isFinite(price) || (price ?? 0) < 0)) {
+      setFormError("Price must be a valid number.");
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      price,
+      duration,
+    };
+
+    try {
+      if (editing) {
+        await updateMutation.mutateAsync({ ...payload, id: editing.id });
+      } else {
+        await createMutation.mutateAsync(payload);
+      }
+      setOpen(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Unable to save service.");
+    }
   };
+
+  const handleDelete = async (service: ServiceRow) => {
+    const confirmed = window.confirm(`Delete "${service.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+    try {
+      await deleteMutation.mutateAsync(service.id);
+    } catch {
+      // The query error alert will surface details.
+    }
+  };
+
+  const saving = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div>
@@ -62,7 +138,7 @@ export default function ServiceManager() {
         <h1 className="font-display text-2xl font-bold">Service Manager</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button onClick={openNew}>
+            <Button onClick={openNew} disabled={!isSupabaseConfigured}>
               <Plus className="mr-1 h-4 w-4" /> Add New Service
             </Button>
           </DialogTrigger>
@@ -78,40 +154,90 @@ export default function ServiceManager() {
               </div>
               <div>
                 <Label>Price ($)</Label>
-                <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                <Input
+                  type="number"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                />
               </div>
               <div>
                 <Label>Duration (mins)</Label>
-                <Input type="number" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} />
+                <Input
+                  type="number"
+                  value={form.duration}
+                  onChange={(e) => setForm({ ...form, duration: e.target.value })}
+                />
               </div>
             </div>
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
             <DialogFooter>
-              <Button onClick={save}>Save</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="rounded-lg border">
+      {!isSupabaseConfigured && (
+        <Alert>
+          <AlertTitle>Supabase Not Configured</AlertTitle>
+          <AlertDescription>Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to manage services.</AlertDescription>
+        </Alert>
+      )}
+
+      {isSupabaseConfigured && error && (
+        <Alert variant="destructive">
+          <AlertTitle>Unable to load services</AlertTitle>
+          <AlertDescription>{(error as Error).message}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="mt-4 rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Price</TableHead>
               <TableHead>Duration</TableHead>
-              <TableHead className="w-16" />
+              <TableHead className="w-24 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {services.map((s) => (
+            {isSupabaseConfigured && isLoading && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                  Loading services...
+                </TableCell>
+              </TableRow>
+            )}
+            {isSupabaseConfigured && !isLoading && (services?.length ?? 0) === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                  No services yet. Add your first service.
+                </TableCell>
+              </TableRow>
+            )}
+            {services?.map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>${s.price}</TableCell>
+                <TableCell>{s.price === null ? "—" : `$${s.price}`}</TableCell>
                 <TableCell>{s.duration} min</TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive"
+                      onClick={() => handleDelete(s)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
