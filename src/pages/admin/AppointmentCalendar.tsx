@@ -15,8 +15,8 @@ import { format } from "date-fns";
 
 export default function AppointmentCalendar() {
   const { data: bookings, isLoading, error } = useQuery({
-    queryKey: ["bookings"],
-    queryFn: fetchBookingsWithServices,
+    queryKey: ["bookings", "upcoming"],
+    queryFn: () => fetchBookingsWithServices({ upcomingOnly: true }),
     enabled: isSupabaseConfigured,
   });
 
@@ -60,13 +60,13 @@ export default function AppointmentCalendar() {
             {isSupabaseConfigured && !isLoading && (bookings?.length ?? 0) === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  No appointments yet.
+                  No upcoming appointments yet.
                 </TableCell>
               </TableRow>
             )}
             {bookings?.map((a) => {
               const date = new Date(a.appointment_time);
-              const status = date >= new Date() ? "upcoming" : "past";
+              const status = "upcoming";
               return (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">{a.customer_name ?? "Unknown"}</TableCell>

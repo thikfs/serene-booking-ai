@@ -73,12 +73,15 @@ export async function deleteService(id: number) {
   if (error) throw error;
 }
 
-export async function fetchBookingsWithServices() {
+export async function fetchBookingsWithServices(options?: { upcomingOnly?: boolean }) {
   const supabase = requireSupabase();
+  const upcomingOnly = options?.upcomingOnly ?? false;
+  const now = new Date().toISOString();
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select("id,service_id,appointment_time,customer_name,customer_email,customer_phone,notes")
-    .order("appointment_time", { ascending: true });
+    .order("appointment_time", { ascending: true })
+    .gte("appointment_time", upcomingOnly ? now : "1900-01-01T00:00:00.000Z");
   if (error) throw error;
   const rows = (bookings ?? []) as BookingRow[];
   const ids = Array.from(new Set(rows.map((b) => b.service_id).filter((id) => Number.isFinite(id))));

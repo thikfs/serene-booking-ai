@@ -72,6 +72,13 @@ To connect a domain, navigate to Project > Settings > Domains and click Connect 
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
 
+## Deployment checklist (Netlify)
+
+1. Link this GitHub repo in Netlify.
+2. Set build command to `npm run build`.
+3. Set publish directory to `dist`.
+4. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` env vars in Netlify.
+
 ## Local environment variables
 
 Create a `.env` file based on `.env.example`:
@@ -80,6 +87,15 @@ Create a `.env` file based on `.env.example`:
 - `VITE_SUPABASE_ANON_KEY`
 
 These power the public services list, admin dashboard, and login flow.
+
+## Project checklist
+
+- Landing page with hero, dynamic services grid, and floating chat widget
+- Protected `/dashboard` route with login
+- Supabase tables: `services`, `bookings`, `agent_settings`
+- Supabase Auth enabled (Email/Password) and RLS for admin-only access
+- Supabase Edge Function `chat-handler` with `check_availability` and `create_booking`
+- Admin CMS: services CRUD, upcoming booking view, live prompt editor
 
 ## Phase 3: AI Bot (Supabase Edge Function)
 
