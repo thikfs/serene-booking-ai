@@ -50,6 +50,22 @@ export async function createService(input: Omit<ServiceRow, "id">) {
   return data as ServiceRow;
 }
 
+export async function seedServices(inputs: Array<Omit<ServiceRow, "id">>) {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from("services")
+    .insert(
+      inputs.map((s) => ({
+        name: s.name,
+        price: s.price,
+        duration: s.duration,
+      })),
+    )
+    .select("id,name,price,duration");
+  if (error) throw error;
+  return (data ?? []) as ServiceRow[];
+}
+
 export async function updateService(input: ServiceRow) {
   const supabase = requireSupabase();
   const { data, error } = await supabase

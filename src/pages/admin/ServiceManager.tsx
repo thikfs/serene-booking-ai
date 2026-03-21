@@ -27,6 +27,7 @@ import {
   createService,
   deleteService,
   fetchServices,
+  seedServices,
   ServiceRow,
   updateService,
 } from "@/lib/supabaseApi";
@@ -38,6 +39,12 @@ type ServiceFormState = {
 };
 
 const emptyForm: ServiceFormState = { name: "", price: "", duration: "" };
+
+const sampleServices: Array<Omit<ServiceRow, "id">> = [
+  { name: "Individual Therapy", price: 120, duration: 60 },
+  { name: "Couples Counseling", price: 180, duration: 90 },
+  { name: "Group Meditation", price: 40, duration: 45 },
+];
 
 export default function ServiceManager() {
   const queryClient = useQueryClient();
@@ -64,6 +71,11 @@ export default function ServiceManager() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteService,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
+  });
+
+  const seedMutation = useMutation({
+    mutationFn: seedServices,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
   });
 
@@ -130,53 +142,71 @@ export default function ServiceManager() {
     }
   };
 
+  const handleSeed = async () => {
+    const confirmed = window.confirm("Add sample services to your database?");
+    if (!confirmed) return;
+    try {
+      await seedMutation.mutateAsync(sampleServices);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Unable to seed services.");
+    }
+  };
+
   const saving = createMutation.isPending || updateMutation.isPending;
+  const isSeeding = seedMutation.isPending;
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="font-display text-2xl font-bold">Service Manager</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openNew} disabled={!isSupabaseConfigured}>
-              <Plus className="mr-1 h-4 w-4" /> Add New Service
+        <div className="flex items-center gap-2">
+          {isSupabaseConfigured && (services?.length ?? 0) === 0 && (
+            <Button variant="outline" onClick={handleSeed} disabled={isSeeding}>
+              {isSeeding ? "Seeding..." : "Add Sample Services"}
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editing ? "Edit Service" : "New Service"}</DialogTitle>
-              <DialogDescription>Fill in the service details below.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div>
-                <Label>Name</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div>
-                <Label>Price ($)</Label>
-                <Input
-                  type="number"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Duration (mins)</Label>
-                <Input
-                  type="number"
-                  value={form.duration}
-                  onChange={(e) => setForm({ ...form, duration: e.target.value })}
-                />
-              </div>
-            </div>
-            {formError && <p className="text-sm text-destructive">{formError}</p>}
-            <DialogFooter>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save"}
+          )}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openNew} disabled={!isSupabaseConfigured}>
+                <Plus className="mr-1 h-4 w-4" /> Add New Service
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editing ? "Edit Service" : "New Service"}</DialogTitle>
+                <DialogDescription>Fill in the service details below.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div>
+                  <Label>Name</Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Price ($)</Label>
+                  <Input
+                    type="number"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Duration (mins)</Label>
+                  <Input
+                    type="number"
+                    value={form.duration}
+                    onChange={(e) => setForm({ ...form, duration: e.target.value })}
+                  />
+                </div>
+              </div>
+              {formError && <p className="text-sm text-destructive">{formError}</p>}
+              <DialogFooter>
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {!isSupabaseConfigured && (
