@@ -38,6 +38,9 @@ export function ChatWidget() {
     if (!supabaseUrl) return undefined;
     // Remove trailing slash if present to prevent double-slash /functions path
     supabaseUrl = supabaseUrl.replace(/\/+$/, "");
+    if (supabaseUrl.includes(".functions.supabase.co")) {
+      return `${supabaseUrl}/chat-handler`;
+    }
     return `${supabaseUrl}/functions/v1/chat-handler`;
   }, []);
 
