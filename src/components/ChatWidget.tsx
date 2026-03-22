@@ -30,6 +30,7 @@ export function ChatWidget() {
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
   const chatEndpoint = useMemo(() => {
     let supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -45,6 +46,13 @@ export function ChatWidget() {
       setMessages((prev) => [
         ...prev,
         { id: Date.now(), text: "Chat is not configured yet (missing VITE_SUPABASE_URL).", sender: "bot" },
+      ]);
+      return;
+    }
+    if (!supabaseAnonKey) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), text: "Chat is not configured yet (missing VITE_SUPABASE_ANON_KEY).", sender: "bot" },
       ]);
       return;
     }
@@ -65,14 +73,27 @@ export function ChatWidget() {
     try {
       const res = await fetch(chatEndpoint, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
         body: JSON.stringify(payload),
       });
 
-      const data = (await res.json().catch(() => null)) as { reply?: string; error?: string } | null;
+      const raw = await res.text();
+      let data: { reply?: string; error?: string } | null = null;
+      try {
+        data = raw ? (JSON.parse(raw) as { reply?: string; error?: string }) : null;
+      } catch {
+        data = null;
+      }
+
       const reply =
         data?.reply ??
-        (res.ok ? "Sorry, I couldn't process that request." : `Chat error: ${data?.error ?? res.status}`);
+        (res.ok
+          ? "Thanks for reaching out — I can help with services, availability, or booking a session."
+          : `Chat error: ${data?.error ?? raw ?? res.status}`);
 
       setMessages((prev) => [
         ...prev,
