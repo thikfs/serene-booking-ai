@@ -30,6 +30,7 @@ export function ChatWidget() {
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
   const chatEndpoint = useMemo(() => {
@@ -43,6 +44,7 @@ export function ChatWidget() {
   const sendMessage = async (text: string) => {
     if (!text.trim() || sending) return;
     if (!chatEndpoint) {
+      setLastError("Missing VITE_SUPABASE_URL");
       setMessages((prev) => [
         ...prev,
         { id: Date.now(), text: "Chat is not configured yet (missing VITE_SUPABASE_URL).", sender: "bot" },
@@ -50,6 +52,7 @@ export function ChatWidget() {
       return;
     }
     if (!supabaseAnonKey) {
+      setLastError("Missing VITE_SUPABASE_ANON_KEY");
       setMessages((prev) => [
         ...prev,
         { id: Date.now(), text: "Chat is not configured yet (missing VITE_SUPABASE_ANON_KEY).", sender: "bot" },
@@ -62,6 +65,7 @@ export function ChatWidget() {
     setMessages(nextMessages);
     setInput("");
     setSending(true);
+    setLastError(null);
 
     const payload: ChatRequestPayload = {
       messages: nextMessages.map((m) => ({
@@ -95,11 +99,16 @@ export function ChatWidget() {
           ? "Thanks for reaching out — I can help with services, availability, or booking a session."
           : `Chat error: ${data?.error ?? raw ?? res.status}`);
 
+      if (!res.ok) {
+        setLastError(data?.error ?? String(res.status));
+      }
+
       setMessages((prev) => [
         ...prev,
         { id: Date.now() + 1, text: reply, sender: "bot" },
       ]);
     } catch {
+      setLastError("Network error");
       setMessages((prev) => [
         ...prev,
         { id: Date.now() + 1, text: "Network error. Please try again.", sender: "bot" },
@@ -108,6 +117,14 @@ export function ChatWidget() {
       setSending(false);
     }
   };
+
+  const statusLine = !chatEndpoint
+    ? "Offline — add VITE_SUPABASE_URL"
+    : !supabaseAnonKey
+      ? "Offline — add VITE_SUPABASE_ANON_KEY"
+      : lastError
+        ? `Issue — ${lastError}`
+        : "Connected";
 
   return (
     <>
@@ -127,6 +144,7 @@ export function ChatWidget() {
           <div className="bg-primary px-4 py-3 text-primary-foreground">
             <p className="font-semibold">Therapy Assistant</p>
             <p className="text-xs opacity-80">We're here to help</p>
+            <p className="text-[11px] opacity-80">{statusLine}</p>
           </div>
 
           {/* Messages */}
