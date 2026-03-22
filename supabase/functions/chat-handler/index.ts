@@ -364,7 +364,7 @@ async function createBookingTool(
   };
 }
 
-async function runChatWithToolCalling(params: {
+async function runOpenAIChatWithToolCalling(params: {
   apiKey: string;
   model: string;
   systemPrompt: string;
@@ -376,7 +376,7 @@ async function runChatWithToolCalling(params: {
   >;
 }) {
   const { apiKey, model, systemPrompt, messages, tools, toolHandlers } = params;
-  const endpoint = "https://openrouter.ai/api/v1/chat/completions";
+  const endpoint = "https://api.openai.com/v1/chat/completions";
 
   let llmMessages: any[] = [
     { role: "system" as const, content: systemPrompt },
@@ -386,8 +386,7 @@ async function runChatWithToolCalling(params: {
     })),
   ];
 
-  for (let i = 0; i < 2; i++) {
-    console.log(`[OpenRouter] Loop ${i}: POST to ${endpoint}...`);
+  for (let i = 0; i < 6; i++) {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -398,13 +397,14 @@ async function runChatWithToolCalling(params: {
         model,
         messages: llmMessages,
         tools,
+        tool_choice: "auto",
         temperature: 0.4,
       }),
     });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`OpenRouter request failed (${res.status}): ${text}`);
+      throw new Error(`OpenAI request failed (${res.status}): ${text}`);
     }
 
     const data = await res.json();
@@ -422,7 +422,6 @@ async function runChatWithToolCalling(params: {
       return { reply: String(content) };
     }
 
-    // Add assistant tool call message, then tool result messages.
     llmMessages = [
       ...llmMessages,
       { role: "assistant", content: String(content), tool_calls: toolCalls },
@@ -459,6 +458,199 @@ async function runChatWithToolCalling(params: {
   throw new Error("Tool loop exceeded without producing output.");
 }
 
+async function runOpenRouterChatWithToolCalling(params: {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  messages: IncomingMessage[];
+  tools: unknown[];
+  toolHandlers: Record<
+    string,
+    (args: Record<string, unknown>) => Promise<unknown>
+  >;
+  referer?: string | null;
+  title?: string | null;
+}) {
+  const { apiKey, model, systemPrompt, messages, tools, toolHandlers, referer, title } = params;
+  const endpoint = "https://openrouter.ai/api/v1/chat/completions";
+
+  let llmMessages: any[] = [
+    { role: "system" as const, content: systemPrompt },
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: m.content,
+    })),
+  ];
+
+  for (let i = 0; i < 6; i++) {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    };
+    if (referer) headers["HTTP-Referer"] = referer;
+    if (title) headers["X-Title"] = title;
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: llmMessages,
+        tools,
+        tool_choice: "auto",
+        temperature: 0.4,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`OpenRouter request failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json();
+    const message = data?.choices?.[0]?.message;
+    const content = message?.content ?? "";
+    const toolCalls = message?.tool_calls as
+      | Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>
+      | undefined;
+
+    if (!toolCalls || toolCalls.length === 0) {
+      return { reply: String(content) };
+    }
+
+    llmMessages = [
+      ...llmMessages,
+      { role: "assistant", content: String(content), tool_calls: toolCalls },
+    ];
+
+    for (const call of toolCalls) {
+      const argsRaw = call.function.arguments ?? "{}";
+      let parsedArgs: Record<string, unknown> = {};
+      try {
+        parsedArgs = JSON.parse(argsRaw);
+      } catch {
+        parsedArgs = {};
+      }
+
+      const handler = toolHandlers[call.function.name];
+      if (!handler) {
+        llmMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ ok: false, error: `Unknown tool: ${call.function.name}` }),
+        });
+        continue;
+      }
+
+      const result = await handler(parsedArgs);
+      llmMessages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result),
+      });
+    }
+  }
+
+  throw new Error("Tool loop exceeded without producing output.");
+}
+
+async function runClaudeChatWithToolCalling(params: {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  messages: IncomingMessage[];
+  tools: Array<{
+    name: string;
+    description: string;
+    input_schema: Record<string, unknown>;
+  }>;
+  toolHandlers: Record<
+    string,
+    (args: Record<string, unknown>) => Promise<unknown>
+  >;
+}) {
+  const { apiKey, model, systemPrompt, messages, tools, toolHandlers } = params;
+  const endpoint = "https://api.anthropic.com/v1/messages";
+
+  let claudeMessages: any[] = messages.map((m) => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: m.content,
+  }));
+
+  for (let i = 0; i < 6; i++) {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": Deno.env.get("ANTHROPIC_VERSION") ?? "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        system: systemPrompt,
+        max_tokens: 800,
+        temperature: 0.4,
+        tools,
+        messages: claudeMessages,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Claude request failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json();
+    const contentBlocks = (data?.content ?? []) as any[];
+
+    const toolUses = contentBlocks.filter((b) => b?.type === "tool_use") as any[];
+    if (!toolUses || toolUses.length === 0) {
+      const text = contentBlocks
+        .filter((b) => b?.type === "text")
+        .map((b) => b.text)
+        .join("");
+      return { reply: String(text) };
+    }
+
+    claudeMessages = [
+      ...claudeMessages,
+      {
+        role: "assistant",
+        content: contentBlocks,
+      },
+    ];
+
+    const toolResultBlocks: any[] = [];
+    for (const use of toolUses) {
+      const name = String(use.name);
+      const input = (use.input ?? {}) as Record<string, unknown>;
+      const handler = toolHandlers[name];
+
+      const result = handler ? await handler(input) : { ok: false, error: `Unknown tool: ${name}` };
+
+      toolResultBlocks.push({
+        type: "tool_result",
+        tool_use_id: use.id,
+        content: JSON.stringify(result),
+      });
+    }
+
+    claudeMessages = [
+      ...claudeMessages,
+      {
+        role: "user",
+        content: toolResultBlocks,
+      },
+    ];
+  }
+
+  throw new Error("Claude tool loop exceeded without producing output.");
+}
+
 export default async function handler(req: Request) {
   try {
     console.log(`[REQUEST] Method: ${req.method} url: ${req.url}`);
@@ -482,8 +674,14 @@ export default async function handler(req: Request) {
         : "You are a receptionist. Check availability before promising time slots. Be concise and professional.";
     const fullBooking = Boolean(agentSettings.full_booking);
 
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    const openaiModel = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const anthropicModel = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-3-5-sonnet-20241022";
     const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
-    const model = Deno.env.get("OPENROUTER_MODEL") ?? "openai/gpt-4o-mini";
+    const openRouterModel = Deno.env.get("OPENROUTER_MODEL") ?? "openai/gpt-4o-mini";
+    const openRouterReferer = Deno.env.get("OPENROUTER_REFERER") ?? null;
+    const openRouterTitle = Deno.env.get("OPENROUTER_TITLE") ?? null;
 
     const { availableTools, toolDefinitionsSystem } = (() => {
       const tools = [
@@ -550,8 +748,28 @@ export default async function handler(req: Request) {
       return { availableTools: tools, toolDefinitionsSystem: sys };
     })();
 
-    if (!openRouterKey) {
+    const llmProvider = (Deno.env.get("LLM_PROVIDER") ?? "").toLowerCase();
+    const provider =
+      llmProvider === "openrouter"
+        ? "openrouter"
+        : llmProvider === "anthropic"
+          ? "anthropic"
+          : llmProvider === "openai"
+            ? "openai"
+            : openRouterKey
+              ? "openrouter"
+              : anthropicKey
+                ? "anthropic"
+                : "openai";
+
+    if (provider === "openrouter" && !openRouterKey) {
       return jsonResponse({ error: "OPENROUTER_API_KEY is not configured in this Edge Function." }, 500);
+    }
+    if (provider === "openai" && !openaiKey) {
+      return jsonResponse({ error: "OPENAI_API_KEY is not configured in this Edge Function." }, 500);
+    }
+    if (provider === "anthropic" && !anthropicKey) {
+      return jsonResponse({ error: "ANTHROPIC_API_KEY is not configured in this Edge Function." }, 500);
     }
 
     const toolHandlers: Record<string, (args: Record<string, unknown>) => Promise<unknown>> = {
@@ -584,13 +802,47 @@ export default async function handler(req: Request) {
       },
     };
 
-    console.log("[LLM] Starting OpenRouter chat loop...");
-    const out = await runChatWithToolCalling({
-      apiKey: openRouterKey,
-      model,
+    if (provider === "openai") {
+      const out = await runOpenAIChatWithToolCalling({
+        apiKey: openaiKey!,
+        model: openaiModel,
+        systemPrompt: toolDefinitionsSystem,
+        messages: body.messages,
+        tools: availableTools,
+        toolHandlers,
+      });
+      return jsonResponse({ reply: out.reply });
+    }
+
+    if (provider === "openrouter") {
+      const out = await runOpenRouterChatWithToolCalling({
+        apiKey: openRouterKey!,
+        model: openRouterModel,
+        systemPrompt: toolDefinitionsSystem,
+        messages: body.messages,
+        tools: availableTools,
+        toolHandlers,
+        referer: openRouterReferer,
+        title: openRouterTitle,
+      });
+      return jsonResponse({ reply: out.reply });
+    }
+
+    const claudeTools = (availableTools as any[]).map((t) => {
+      const fn = t?.function;
+      return {
+        name: fn?.name,
+        description: fn?.description ?? "",
+        input_schema: fn?.parameters ?? { type: "object", properties: {} },
+      };
+    });
+
+    const out = await runClaudeChatWithToolCalling({
+      apiKey: anthropicKey!,
+      model: anthropicModel,
       systemPrompt: toolDefinitionsSystem,
       messages: body.messages,
-      tools: availableTools,
+      tools: claudeTools,
       toolHandlers,
     });
 

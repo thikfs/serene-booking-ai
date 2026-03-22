@@ -110,11 +110,17 @@ This repo now includes a Supabase Edge Function at `supabase/functions/chat-hand
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`)
+- One of:
+  - `OPENAI_API_KEY`
+  - `ANTHROPIC_API_KEY`
+  - `OPENROUTER_API_KEY`
 - Optional:
-  - `LLM_PROVIDER` (`openai` or `anthropic`)
+  - `LLM_PROVIDER` (`openai`, `anthropic`, or `openrouter`)
   - `OPENAI_MODEL` (default: `gpt-4o-mini`)
   - `ANTHROPIC_MODEL` (default: `claude-3-5-sonnet-20241022`)
+  - `OPENROUTER_MODEL` (default: `openai/gpt-4o-mini`)
+  - `OPENROUTER_REFERER` (optional)
+  - `OPENROUTER_TITLE` (optional)
   - `BUSINESS_HOURS_START` (default: `09:00`)
   - `BUSINESS_HOURS_END` (default: `17:00`)
   - `SLOT_INTERVAL_MINUTES` (default: `30`)
